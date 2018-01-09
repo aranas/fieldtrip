@@ -9,8 +9,9 @@ function [stat, cfg] = ft_statistics_crossvalidate(cfg, dat, design)
 %   stat = ft_sourcestatistics  (cfg, data1, data2, data3, ...)
 %
 % Options:
-%   cfg.mva           = a multivariate analysis (default = {dml.standardizer dml.svm})
-%   cfg.statistic     = a cell-array of statistics to report (default = {'accuracy' 'binomial'})
+%   cfg.mva           = a multivariate analysis (default = {dml.standardizer dml.svm}) or string with user-specified function name
+%   cfg.statistic     = a cell-array of statistics to report (default = {'accuracy' 'binomial'}); or string with user-specified function.
+%   cfg.type          = a string specifying cross-validation scheme (default = nfold) /'nfold','split','loo','bloo';
 %   cfg.nfolds        = number of cross-validation folds (default = 5)
 %   cfg.resample      = true/false; upsample less occurring classes during
 %                       training and downsample often occurring classes
@@ -45,7 +46,6 @@ function [stat, cfg] = ft_statistics_crossvalidate(cfg, dat, design)
 % do a sanity check on the input data
 assert(isnumeric(dat),    'this function requires numeric data as input, you probably want to use FT_TIMELOCKSTATISTICS, FT_FREQSTATISTICS or FT_SOURCESTATISTICS instead');
 assert(isnumeric(design), 'this function requires numeric data as input, you probably want to use FT_TIMELOCKSTATISTICS, FT_FREQSTATISTICS or FT_SOURCESTATISTICS instead');
-
 cfg.mva       = ft_getopt(cfg, 'mva');
 cfg.statistic = ft_getopt(cfg, 'statistic', {'accuracy', 'binomial'});
 cfg.nfolds    = ft_getopt(cfg, 'nfolds',   5);
@@ -53,13 +53,12 @@ cfg.resample  = ft_getopt(cfg, 'resample', false);
 cfg.cv        = ft_getopt(cfg, 'cv', []);
 cfg.cv.type   = ft_getopt(cfg.cv, 'type', 'nfold');
 
-
 % specify classification procedure or ensure it's the correct object
 if isempty(cfg.mva)
-  cfg.mva = dml.analysis({ dml.standardizer('verbose',true) ...
-                           dml.svm('verbose',true)});
+    cfg.mva = dml.analysis({ dml.standardizer('verbose',true) ...
+        dml.svm('verbose',true)});
 elseif ~isa(cfg.mva,'dml.analysis')
-  cfg.mva = dml.analysis(cfg.mva);
+    cfg.mva = dml.analysis(cfg.mva);
 end
 
 cv_options = {'mva', cfg.mva, 'type', cfg.cv.type, 'resample', cfg.resample, 'compact', true, 'verbose', true};
@@ -69,67 +68,138 @@ end
 cv = dml.crossvalidator(cv_options{:});
 
 if any(isinf(dat(:)))
-  ft_warning('Inf encountered; replacing by zeros');
-  dat(isinf(dat(:))) = 0;
+    warning('Inf encountered; replacing by zeros');
+    dat(isinf(dat(:))) = 0;
 end
 
 if any(isnan(dat(:)))
-  ft_warning('Nan encountered; replacing by zeros');
-  dat(isnan(dat(:))) = 0;
+    warning('Nan encountered; replacing by zeros');
+    dat(isnan(dat(:))) = 0;
 end
 
-% perform everything
-cv = cv.train(dat',design');
+
+if ischar(cfg.mva.method{1})
+    statfun = str2fun(cfg.mva.method{1});
+    fprintf('using "%s" for crossvalidation\n', cfg.mva.method{1});
+    
+    X = dat';
+    Y = design';
+    
+    % complete the folds when only train or test is specified
+    if isempty(cv.trainfolds) && isempty(cv.testfolds)
+        [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
+    elseif isempty(cv.trainfolds)
+        cv.trainfolds = cv.complement(Y,cv.testfolds);
+    else
+        cv.testfolds = cv.complement(Y,cv.trainfolds);
+    end
+    
+    if iscell(Y)
+        ndata = length(Y);
+    else
+        ndata = 1;
+    end
+    
+    if ndata == 1
+        nfolds = length(cv.trainfolds);
+    else
+        nfolds = length(cv.trainfolds{1});
+    end
+    
+    cv.result = cell(nfolds,1);
+    cv.design = cell(nfolds,1);
+    cv.model = cell(nfolds,1);
+    
+    for f=1:nfolds % iterate over folds
+        
+        if cv.verbose
+            if ndata == 1
+                fprintf('validating fold %d of %d for %d datasets\n',f,nfolds,ndata);
+            else
+                fprintf('validating fold %d of %d for %d datasets\n',f,nfolds,ndata);
+            end
+        end
+        
+        % construct X and Y for each fold
+        if ndata == 1
+            trainX = X(cv.trainfolds{f},:);
+            testX = X(cv.testfolds{f},:);
+            trainY = Y(cv.trainfolds{f},:);
+            testY = Y(cv.testfolds{f},:);
+        else
+            trainX = cell([length(X) 1]);
+            testX = cell([length(X) 1]);
+            for cv=1:length(X)
+                trainX{cv} = X{cv}(cv.trainfolds{cv}{f},:);
+                testX{cv} = X{cv}(cv.testfolds{cv}{f},:);
+            end
+            trainY = cell([length(Y) 1]);
+            testY = cell([length(Y) 1]);
+            for cv=1:length(Y)
+                trainY{cv} = Y{cv}(cv.trainfolds{cv}{f},:);
+                testY{cv} = Y{cv}(cv.testfolds{cv}{f},:);
+            end
+        end
+        
+        nout                        = nargout(statfun);
+        outputs                     = cell(1, nout-2);
+        
+        [model,result,outputs{:}]   = statfun(cfg,trainX,testX,trainY);
+        cv.model{f}.weights         = model;
+        cv.result{f}                = result;
+        cv.design{f}                = testY;
+        out{f}                      = outputs{:};
+        
+        
+        clear varargout;
+        clear model;
+        clear result;
+        clear trainX;
+        clear testX;
+        clear trainY;
+        clear testY;
+        
+    end
+    
+    % return unique model instead of cell array in case of one fold
+    if length(cv.model)==1, cv.model = cv.model{1}; end
+    
+else
+    fprintf('using DMLT toolbox\n');
+    % perform everything
+    cv = cv.train(dat',design');
+end
+
 
 % extract the statistic of interest
 s = cv.statistic(cfg.statistic);
 for i=1:length(cfg.statistic)
- stat.statistic.(cfg.statistic{i}) = s{i};
+    stat.statistic.(cfg.statistic{i}) = s{i};
 end
-
 % get the model averaged over folds
-stat.model = cv.model;
+stat.model  = cv.model;
+stat.result = cv.result; %keep this information to be able to inspec per example performance without having to save entire cv object
+if exist('out') stat.out    = out; end
 
 fn = fieldnames(stat.model{1});
-if any(ismember(fn,  {'weights', 'primal'})),
-  selfn = find(ismember(fn, {'weights', 'primal'}));
-  
-  % the mean subtraction is needed only once, but speeds up the covariance
-  % computation
-  dat = bsxfun(@minus, dat, nanmean(dat,2)); 
-  dat_transp = dat.';
-  for j=1:numel(selfn)
+if any(strcmp(fn, 'weights'))
     % create the 'encoding' matrix from the weights, as per Haufe 2014.
-    %covdat = cov(dat');
+    covdat = cov(dat');
     for i=1:length(stat.model)
-      i
-      W = stat.model{i}.(fn{selfn});
-      
-      sW   = size(W);
-      sdat = size(dat);
-      if sW(2)==sdat(1) && sW(1)~=sdat(1)
-        W = transpose(W);
-      end
-      
-      M    = dat'*W;
-      covM = cov(M);
-      WcovM = (W/covM)./(size(dat,2)-1); % with the correction term for the covariance computation
-      
-      %stat.model{i}.(sprintf('%sinv',fn{selfn})) = covdat*W/covM;
-      stat.model{i}.(sprintf('%sinv',fn{selfn})) = dat*(dat_transp*WcovM);
-      
+        W = stat.model{i}.weights;
+        M = dat'*W;
+        covM = cov(M);
+        stat.model{i}.weightsinv = covdat*W/covM;
     end
-  end
 end
-fn = fieldnames(stat.model{1}); % update the fieldnames, because some might have been added
 
 fn = fieldnames(stat.model{1}); % may now also contain weightsinv
 for i=1:length(stat.model)
-  for k=1:length(fn)
-    if numel(stat.model{i}.(fn{k}))==prod(cfg.dim)
-      stat.model{i}.(fn{k}) = reshape(stat.model{i}.(fn{k}),cfg.dim);
+    for k=1:length(fn)
+        if numel(stat.model{i}.(fn{k}))==prod(cfg.dim)
+            stat.model{i}.(fn{k}) = reshape(stat.model{i}.(fn{k}),cfg.dim);
+        end
     end
-  end
 
 end
 
