@@ -79,7 +79,7 @@ end
 
 
 if ischar(cfg.mva.method{1})
-    statfun = str2fun(cfg.mva.method{1});
+    mvafun = str2fun(cfg.mva.method{1});
     fprintf('using "%s" for crossvalidation\n', cfg.mva.method{1});
     
     X = dat';
@@ -141,10 +141,10 @@ if ischar(cfg.mva.method{1})
             end
         end
         
-        nout                        = nargout(statfun);
+        nout                        = nargout(mvafun);
         outputs                     = cell(1, nout-2);
         
-        [model,result,outputs{:}]   = statfun(cfg,trainX,testX,trainY);
+        [model,result,outputs{:}]   = mvafun(cfg,trainX,testX,trainY);
         cv.model{f}.weights         = model;
         cv.result{f}                = result;
         cv.design{f}                = testY;
@@ -172,36 +172,51 @@ end
 
 
 % extract the statistic of interest
+try
 s = cv.statistic(cfg.statistic);
 for i=1:length(cfg.statistic)
     stat.statistic.(cfg.statistic{i}) = s{i};
 end
+% if defined statistic is not part of toolbox search for user defined
+% function
+catch ME
+    line = ME.stack.line;
+    if (strcmp(ME.identifier,'') && (line == 134))
+        userstatfun         = str2fun(cfg.statistic{1});
+        nout                = nargout(userstatfun);
+        outputs             = cell(1, nout);
+        [outputs{:}]        = userstatfun(cfg,cv);
+        stat.statistic      = outputs;
+    end
+end
+
+
 % get the model averaged over folds
 stat.model  = cv.model;
 stat.result = cv.result; %keep this information to be able to inspec per example performance without having to save entire cv object
 if exist('out') stat.out    = out; end
 
-fn = fieldnames(stat.model{1});
-if any(strcmp(fn, 'weights'))
-    % create the 'encoding' matrix from the weights, as per Haufe 2014.
-    covdat = cov(dat');
-    for i=1:length(stat.model)
-        W = stat.model{i}.weights;
-        M = dat'*W;
-        covM = cov(M);
-        stat.model{i}.weightsinv = covdat*W/covM;
-    end
-end
-
-fn = fieldnames(stat.model{1}); % may now also contain weightsinv
-for i=1:length(stat.model)
-    for k=1:length(fn)
-        if numel(stat.model{i}.(fn{k}))==prod(cfg.dim)
-            stat.model{i}.(fn{k}) = reshape(stat.model{i}.(fn{k}),cfg.dim);
-        end
-    end
-
-end
+% fn = fieldnames(stat.model{1});
+% if any(strcmp(fn, 'weights'))
+%     % create the 'encoding' matrix from the weights, as per Haufe 2014.
+%     covdat = cov(dat');
+%     for i=1:length(stat.model)
+%         W = stat.model{i}.weights;
+%         M = dat'*W;
+%         covM = cov(M);
+%         stat.model{i}.weightsinv = covdat*W/covM;
+%     end
+% end
+% 
+% fn = fieldnames(stat.model{1}); % may now also contain weightsinv
+% for i=1:length(stat.model)
+%     for k=1:length(fn)
+%         if numel(stat.model{i}.(fn{k}))==prod(cfg.dim)
+%             stat.model{i}.(fn{k}) = reshape(stat.model{i}.(fn{k}),cfg.dim);
+%         end
+%     end
+% 
+% end
 
 % required
 stat.trial = [];
