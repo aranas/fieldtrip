@@ -79,21 +79,22 @@ end
 
 
 if ischar(cfg.mva.method{1})
-    mvafun = str2fun(cfg.mva.method{1});
+    
+    mvafun    = str2fun(cfg.mva.method{1});
     fprintf('using "%s" for crossvalidation\n', cfg.mva.method{1});
     
-    X = dat';
-    Y = design';
+    X         = dat';
+    Y         = design';
     
     
     [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
     
-    nfolds = length(cv.trainfolds);
+    nfolds    = length(cv.trainfolds);
     
     
     cv.result = cell(nfolds,1);
     cv.design = cell(nfolds,1);
-    cv.model = cell(nfolds,1);
+    cv.model  = cell(nfolds,1);
     
     for f=1:nfolds % iterate over folds
         
@@ -103,19 +104,18 @@ if ischar(cfg.mva.method{1})
         
         % construct X and Y for each fold
         trainX = X(cv.trainfolds{f},:);
-        testX = X(cv.testfolds{f},:);
+        testX  = X(cv.testfolds{f},:);
         trainY = Y(cv.trainfolds{f},:);
-        testY = Y(cv.testfolds{f},:);
+        testY  = Y(cv.testfolds{f},:);
         
         
         nout                        = nargout(mvafun);
         outputs                     = cell(1, nout-2);
         
-        [model,result,outputs{:}]   = mvafun(cfg,trainX,testX,trainY);
-        cv.model{f}.weights         = model;
-        cv.result{f}                = result;
-        cv.design{f}                = testY;
-        out{f}                      = outputs{:};
+        [stat.model{f},stat.result{f},stat.out{f}]  = mvafun(cfg,trainX,testX,trainY);
+        cv.model{f}.weights                         = stat.model{f};
+        cv.result{f}                                = stat.result{f};
+        cv.design{f}                                = testY;
         
         
         clear varargout;
@@ -159,10 +159,6 @@ end
 
 
 % get the model averaged over folds
-stat.model  = cv.model;
-stat.result = cv.result; %keep this information to be able to inspec per example performance without having to save entire cv object
-if exist('out') stat.out    = out; end
-
 % fn = fieldnames(stat.model{1});
 % if any(strcmp(fn, 'weights'))
 %     % create the 'encoding' matrix from the weights, as per Haufe 2014.
