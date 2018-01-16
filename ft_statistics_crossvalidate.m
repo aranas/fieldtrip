@@ -85,26 +85,11 @@ if ischar(cfg.mva.method{1})
     X = dat';
     Y = design';
     
-    % complete the folds when only train or test is specified
-    if isempty(cv.trainfolds) && isempty(cv.testfolds)
-        [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
-    elseif isempty(cv.trainfolds)
-        cv.trainfolds = cv.complement(Y,cv.testfolds);
-    else
-        cv.testfolds = cv.complement(Y,cv.trainfolds);
-    end
     
-    if iscell(Y)
-        ndata = length(Y);
-    else
-        ndata = 1;
-    end
+    [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
     
-    if ndata == 1
-        nfolds = length(cv.trainfolds);
-    else
-        nfolds = length(cv.trainfolds{1});
-    end
+    nfolds = length(cv.trainfolds);
+    
     
     cv.result = cell(nfolds,1);
     cv.design = cell(nfolds,1);
@@ -113,33 +98,15 @@ if ischar(cfg.mva.method{1})
     for f=1:nfolds % iterate over folds
         
         if cv.verbose
-            if ndata == 1
-                fprintf('validating fold %d of %d for %d datasets\n',f,nfolds,ndata);
-            else
-                fprintf('validating fold %d of %d for %d datasets\n',f,nfolds,ndata);
-            end
+            fprintf('validating fold %d of %d\n',f,nfolds);
         end
         
         % construct X and Y for each fold
-        if ndata == 1
-            trainX = X(cv.trainfolds{f},:);
-            testX = X(cv.testfolds{f},:);
-            trainY = Y(cv.trainfolds{f},:);
-            testY = Y(cv.testfolds{f},:);
-        else
-            trainX = cell([length(X) 1]);
-            testX = cell([length(X) 1]);
-            for cv=1:length(X)
-                trainX{cv} = X{cv}(cv.trainfolds{cv}{f},:);
-                testX{cv} = X{cv}(cv.testfolds{cv}{f},:);
-            end
-            trainY = cell([length(Y) 1]);
-            testY = cell([length(Y) 1]);
-            for cv=1:length(Y)
-                trainY{cv} = Y{cv}(cv.trainfolds{cv}{f},:);
-                testY{cv} = Y{cv}(cv.testfolds{cv}{f},:);
-            end
-        end
+        trainX = X(cv.trainfolds{f},:);
+        testX = X(cv.testfolds{f},:);
+        trainY = Y(cv.trainfolds{f},:);
+        testY = Y(cv.testfolds{f},:);
+        
         
         nout                        = nargout(mvafun);
         outputs                     = cell(1, nout-2);
@@ -172,23 +139,22 @@ end
 
 
 % extract the statistic of interest
-try
-s = cv.statistic(cfg.statistic);
-for i=1:length(cfg.statistic)
-    stat.statistic.(cfg.statistic{i}) = s{i};
-end
-% if defined statistic is not part of toolbox search for user defined
-% function
-catch ME
-    line = ME.stack.line;
-    if (strcmp(ME.identifier,'') && (line == 134))
+    s = cv.statistic(cfg.statistic);
+    for i=1:length(cfg.statistic)
+        stat.statistic.(cfg.statistic{i}) = s{i};
+    end
+    % if defined statistic is not part of toolbox search for user defined
+    % function
+    toolboxstatfuns         = {'accuracy','logprob','correlation','R2',...
+        'contingency','confusion','binomial','MAD','RMS','tlin','identity','expvar'};
+    if ~any(ismember(toolboxstatfuns,cfg.statistic))
         userstatfun         = str2fun(cfg.statistic{1});
         nout                = nargout(userstatfun);
         outputs             = cell(1, nout);
         [outputs{:}]        = userstatfun(cfg,cv);
         stat.statistic      = outputs;
     end
-end
+
 
 
 % get the model averaged over folds
@@ -207,7 +173,7 @@ if exist('out') stat.out    = out; end
 %         stat.model{i}.weightsinv = covdat*W/covM;
 %     end
 % end
-% 
+%
 % fn = fieldnames(stat.model{1}); % may now also contain weightsinv
 % for i=1:length(stat.model)
 %     for k=1:length(fn)
@@ -215,7 +181,7 @@ if exist('out') stat.out    = out; end
 %             stat.model{i}.(fn{k}) = reshape(stat.model{i}.(fn{k}),cfg.dim);
 %         end
 %     end
-% 
+%
 % end
 
 % required
