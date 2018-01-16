@@ -139,21 +139,22 @@ end
 
 
 % extract the statistic of interest
+% if defined statistic is not part of toolbox search for user defined
+% function
+toolboxstatfuns         = {'accuracy','logprob','correlation','R2',...
+    'contingency','confusion','binomial','MAD','RMS','tlin','identity','expvar'};
+if ~any(ismember(toolboxstatfuns,cfg.statistic))
+    userstatfun         = str2fun(cfg.statistic{1});
+    nout                = nargout(userstatfun);
+    outputs             = cell(1, nout);
+    [outputs{:}]        = userstatfun(cfg,cv);
+    stat.statistic      = outputs;
+else
     s = cv.statistic(cfg.statistic);
     for i=1:length(cfg.statistic)
         stat.statistic.(cfg.statistic{i}) = s{i};
     end
-    % if defined statistic is not part of toolbox search for user defined
-    % function
-    toolboxstatfuns         = {'accuracy','logprob','correlation','R2',...
-        'contingency','confusion','binomial','MAD','RMS','tlin','identity','expvar'};
-    if ~any(ismember(toolboxstatfuns,cfg.statistic))
-        userstatfun         = str2fun(cfg.statistic{1});
-        nout                = nargout(userstatfun);
-        outputs             = cell(1, nout);
-        [outputs{:}]        = userstatfun(cfg,cv);
-        stat.statistic      = outputs;
-    end
+end
 
 
 
