@@ -302,7 +302,7 @@ classdef crossvalidator
                 
                 % take labeled indices
                 idx = idx(idxs);
-                
+                %loop through folds and evenly distribute each class [sa]
                 f=1;
                 for j=1:mx
                   iidx = find(idx == j);
