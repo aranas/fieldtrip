@@ -56,6 +56,9 @@ classdef crossvalidator
       proportion = 0.75; % 'proportion' : proportion of used training data when using split
       
       resample = false; % 'resample' : whether or not to use resampling to balance classes
+      
+      max_smp = 0; % 'max_smp' : if > 0 make sub-selection using specified number of train samples 
+                   %(i.e. for learning curve computation)
             
       % cell array indicating used trials per training fold
       % for multiple datasets this should be come a cell array of cell
@@ -209,6 +212,10 @@ classdef crossvalidator
         
         train = obj.complement(Y,test);
         
+        if obj.max_smp > 0
+            train = select_train_folds(obj,Y,train);
+        end
+        
         if obj.resample
           train = upsample(train,Y);
           test  = downsample(test,Y);
@@ -240,7 +247,7 @@ classdef crossvalidator
           
           % Commented this hard-coded random seed out, should be handled
           % via ft_timelockstatistics by specifying cfg.randomseed [January
-          % 2018, SA]
+          % 2018, sopara]
           
 %           try
 %             RandStream.setGlobalStream(RandStream('mt19937ar','seed',1));
@@ -447,6 +454,21 @@ classdef crossvalidator
             
       end
       
+      function train = select_train_folds(obj,Y,train)
+          % make sure outcomes are evenly represented whenever possible
+          [t,t,idx] = unique(Y,'rows');
+          mx = max(idx); 
+          for f=1:obj.folds
+              y = [];
+              for j=1:mx
+                  iidx = find(Y(train{f}) == j);
+                  
+                  y = [y;train{f}(iidx(randperm(length(iidx),obj.max_smp/2)))];
+              end 
+              train{f} = y;
+          end
+      end
+      
     end
     
     methods(Access=private,Static=true)
@@ -473,7 +495,6 @@ classdef crossvalidator
         end
         
       end
-      
     end
     
     
