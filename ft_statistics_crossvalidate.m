@@ -52,16 +52,24 @@ cfg.nfolds    = ft_getopt(cfg, 'nfolds',   5);
 cfg.resample  = ft_getopt(cfg, 'resample', false);
 cfg.cv        = ft_getopt(cfg, 'cv', []);
 cfg.cv.type   = ft_getopt(cfg.cv, 'type', 'nfold');
+cfg.max_smp   = ft_getopt(cfg, 'max_smp',[]);
 
 % specify classification procedure or ensure it's the correct object
 if isempty(cfg.mva)
     cfg.mva = dml.analysis({ dml.standardizer('verbose',true) ...
         dml.svm('verbose',true)});
-elseif ~isa(cfg.mva,'dml.analysis')
+elseif iscell(cfg.mva)
+    for k=1:numel(cfg.mva)
+        if ischar(cfg.mva{k})
+            cfg.mva{k} = eval(cfg.mva{k});
+        end
+    end
+end
+if ~isa(cfg.mva,'dml.analysis')
     cfg.mva = dml.analysis(cfg.mva);
 end
 
-cv_options = {'mva', cfg.mva, 'type', cfg.cv.type, 'resample', cfg.resample, 'compact', true, 'verbose', true};
+cv_options = {'mva', cfg.mva, 'type', cfg.cv.type, 'resample', cfg.resample, 'max_smp', cfg.max_smp , 'compact', true, 'verbose', true};
 if strcmp(cfg.cv.type, 'nfold')
   cv_options = cat(2, cv_options, {'folds', cfg.nfolds});
 end
@@ -95,6 +103,7 @@ if ischar(cfg.mva.method{1})
     cv.result = cell(nfolds,1);
     cv.design = cell(nfolds,1);
     cv.model  = cell(nfolds,1);
+    cvtrain   = cv;
     
     for f=1:nfolds % iterate over folds
         
@@ -111,6 +120,13 @@ if ischar(cfg.mva.method{1})
         
         nout                        = nargout(mvafun);
         outputs                     = cell(1, nout-2);
+        
+        if ~isempty(cfg.max_smp)
+            [model,result]                              = mvafun(cfg,trainX,trainX,trainY);  
+            cvtrain.model{f}.weights                    = model;
+            cvtrain.result{f}                           = result;
+            cvtrain.design{f}                           = trainY;
+        end
         
         [stat.model{f},stat.result{f},stat.out{f}]  = mvafun(cfg,trainX,testX,trainY);
         cv.model{f}.weights                         = stat.model{f};
@@ -153,6 +169,12 @@ else
     s = cv.statistic(cfg.statistic);
     for i=1:length(cfg.statistic)
         stat.statistic.(cfg.statistic{i}) = s{i};
+    end
+    if ~isempty(cfg.max_smp)
+          s = cvtrain.statistic(cfg.statistic);
+        for i=1:length(cfg.statistic)
+          stat.trainacc.statistic.(cfg.statistic{i}) = s{i};
+        end
     end
 end
 
