@@ -145,6 +145,9 @@ else
     fprintf('using DMLT toolbox\n');
     % perform everything
     cv = cv.train(dat',design');
+    cvtrain = cv;
+    cvtrain.result = cv.trainresult';
+    cvtrain.design = cv.traindesign';
 end
 
 
