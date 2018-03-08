@@ -47,6 +47,10 @@ classdef crossvalidator
      
       design % the real outputs
       
+      trainresult % crossvalidation result on training data
+      
+      traindesign % the real outputs of training data
+      
       model % estimated model per fold
       
       type = 'nfold'; % 'type' : crossvalidation type 'nfold', 'split', 'loo'
@@ -161,6 +165,10 @@ classdef crossvalidator
           if ~isempty(testY)
             obj.result{f} = tproc.test(testX);
             obj.design{f} = testY;
+          end
+          if obj.max_smp > 0
+              obj.trainresult{f} = tproc.test(trainX);
+              obj.traindesign{f} = trainY;
           end
           obj.model{f} = tproc.model();
               
