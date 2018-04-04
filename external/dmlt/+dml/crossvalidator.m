@@ -479,7 +479,7 @@ classdef crossvalidator
       
     end
     
-    methods(Access=private,Static=true)
+    methods(Access=public,Static=true)
       
       function y = complement(Y,folds)
         % create complement of trials in each of the folds when only training
