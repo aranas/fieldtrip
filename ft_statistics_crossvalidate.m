@@ -50,6 +50,8 @@ cfg.nfolds    = ft_getopt(cfg, 'nfolds',   5);
 cfg.resample  = ft_getopt(cfg, 'resample', false);
 cfg.type      = ft_getopt(cfg, 'type','nfold');
 cfg.max_smp   = ft_getopt(cfg, 'max_smp',[]);
+cfg.scale     = ft_getopt(cfg, 'scale',1);
+cfg.testfolds = ft_getopt(cfg, 'testfolds',[]);
 
 % specify classification procedure or ensure it's the correct object
 if isempty(cfg.mva)
@@ -67,7 +69,8 @@ if ~isa(cfg.mva,'dml.analysis')
 end
 
 cv = dml.crossvalidator('mva', cfg.mva, 'type', cfg.type, 'folds', cfg.nfolds,...
-    'resample', cfg.resample, 'max_smp', cfg.max_smp, 'compact', true, 'verbose', true);
+    'resample', cfg.resample, 'testfolds', cfg.testfolds,...
+    'max_smp', cfg.max_smp, 'compact', true, 'verbose', true);
 
 if any(isinf(dat(:)))
     warning('Inf encountered; replacing by zeros');
@@ -89,7 +92,13 @@ if ischar(cfg.mva.method{1})
     Y         = design';
     
     
-    [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
+    if isempty(cv.trainfolds) && isempty(cv.testfolds)
+          [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
+   elseif isempty(cv.trainfolds)
+          cv.trainfolds = cv.complement(Y,cv.testfolds);
+   else
+          cv.testfolds = cv.complement(Y,cv.trainfolds);
+   end
     
     nfolds    = length(cv.trainfolds);
     
@@ -100,7 +109,7 @@ if ischar(cfg.mva.method{1})
     cvtrain   = cv;
     
     for f=1:nfolds % iterate over folds
-        
+
         if cv.verbose
             fprintf('validating fold %d of %d\n',f,nfolds);
         end
@@ -122,8 +131,8 @@ if ischar(cfg.mva.method{1})
             cvtrain.design{f}                           = trainY;
         end
         
-        [stat.model{f},stat.result{f},stat.out{f}]  = mvafun(cfg,trainX,testX,trainY);
-        cv.model{f}.weights                         = stat.model{f};
+        [stat.model,stat.result{f},stat.out{f}]  = mvafun(cfg,trainX,testX,trainY);
+        cv.model{f}.weights                         = stat.model;
         cv.result{f}                                = stat.result{f};
         cv.design{f}                                = testY;
         
@@ -135,7 +144,7 @@ if ischar(cfg.mva.method{1})
         clear testX;
         clear trainY;
         clear testY;
-        
+ 
     end
     
     % return unique model instead of cell array in case of one fold
