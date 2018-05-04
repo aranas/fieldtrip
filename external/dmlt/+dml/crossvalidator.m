@@ -63,6 +63,7 @@ classdef crossvalidator
       
       max_smp = 0; % 'max_smp' : if > 0 make sub-selection using specified number of train samples 
                    %(i.e. for learning curve computation)
+      pos  % vocab corresponding to labels
             
       % cell array indicating used trials per training fold
       % for multiple datasets this should be come a cell array of cell
@@ -220,7 +221,7 @@ classdef crossvalidator
         
         train = obj.complement(Y,test);
         
-        if obj.max_smp > 0
+        if ~isempty(obj.max_smp) && obj.max_smp < size(train{1},1)
             train = select_train_folds(obj,Y,train);
         end
         
@@ -464,7 +465,12 @@ classdef crossvalidator
       
       function train = select_train_folds(obj,Y,train)
           % make sure outcomes are evenly represented whenever possible
-          [t,t,idx] = unique(Y,'rows');
+          if ~isempty(strfind(obj.mva.method,'regression'))
+              for f=1:obj.folds
+              train{f} = train{f}(randperm(length(train{f}),obj.max_smp));
+              end
+          else
+          [~,~,idx] = unique(Y,'rows');
           mx = max(idx); 
           for f=1:obj.folds
               y = [];
@@ -475,6 +481,8 @@ classdef crossvalidator
               end 
               train{f} = y;
           end
+          end
+          
       end
       
     end
