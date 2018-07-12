@@ -178,10 +178,10 @@ if ~any(ismember(toolboxstatfuns,cfg.statistic))
     userstatfun         = str2fun(cfg.statistic{1});
     nout                = nargout(userstatfun);
     outputs             = cell(1, nout);
-    [outputs{:}]        = userstatfun(cfg,cv,size(cv.result{1},1));
+    [outputs{:}]        = userstatfun(cfg,cv);
     stat.statistic      = outputs;
     if ~isempty(cfg.max_smp)
-        [outputs{:}]            = userstatfun(cfg,cvtrain,size(cv.result{1},1));
+        [outputs{:}]            = userstatfun(cfg,cvtrain);
         stat.trainacc.statistic = outputs;
     end
 else
