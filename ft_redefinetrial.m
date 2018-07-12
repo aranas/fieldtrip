@@ -162,8 +162,8 @@ if ~isempty(cfg.toilim)
       endsample(i) = nan;
       skiptrial(i) = true;
     else
-      begsample(i) = nearest(data.time{i}, cfg.toilim(1));
-      endsample(i) = nearest(data.time{i}, cfg.toilim(2));
+      begsample(i) = nearest(data.time{i}, cfg.toilim(i,1));
+      endsample(i) = nearest(data.time{i}, cfg.toilim(i,2));
       data.trial{i} = data.trial{i}(:, begsample(i):endsample(i));
       data.time{i}  = data.time{i} (   begsample(i):endsample(i));
     end
