@@ -465,7 +465,7 @@ classdef crossvalidator
       
       function train = select_train_folds(obj,Y,train)
           % make sure outcomes are evenly represented whenever possible
-          if ~isempty(strfind(obj.mva.method,'regression'))
+          if ~isempty(strfind(obj.mva.method{1},'regression'))
               for f=1:obj.folds
               train{f} = train{f}(randperm(length(train{f}),obj.max_smp));
               end
