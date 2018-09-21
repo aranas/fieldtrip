@@ -117,6 +117,7 @@ if ischar(cfg.mva.method{1})
     nout                        = nargout(mvafun);
     stat.out                    = cell(nfolds, nout-2);
     
+    
     for f=1:nfolds % iterate over folds
 
         if cv.verbose
@@ -132,7 +133,6 @@ if ischar(cfg.mva.method{1})
           cv.pos{f} = cfg.vocab(cv.testfolds{f});
         end
         
-        
         if ~isempty(cfg.max_smp)
             [model,result,~]                      = mvafun(cfg,trainX,trainX,trainY);  
             cvtrain.model{f}.weights                    = model;
@@ -140,7 +140,7 @@ if ischar(cfg.mva.method{1})
             cvtrain.design{f}                           = trainY;
         end
         
-        [stat.model,stat.result{f},stat.out{f}]  = mvafun(cfg,trainX,testX,trainY);
+        [stat.model,stat.result{f},stat.out{f,1:end}]  = mvafun(cfg,trainX,testX,trainY);
         cv.model{f}.weights                         = stat.model;
         cv.result{f}                                = stat.result{f};
         cv.design{f}                                = testY;
