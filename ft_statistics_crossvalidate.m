@@ -87,7 +87,6 @@ if any(isnan(dat(:)))
     dat(isnan(dat(:))) = 0;
 end
 
-
 if ischar(cfg.mva.method{1})
     
     mvafun    = str2fun(cfg.mva.method{1});
@@ -98,12 +97,12 @@ if ischar(cfg.mva.method{1})
     
     
     if isempty(cv.trainfolds) && isempty(cv.testfolds)
-          [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
-   elseif isempty(cv.trainfolds)
-          cv.trainfolds = cv.complement(Y,cv.testfolds);
-   else
-          cv.testfolds = cv.complement(Y,cv.trainfolds);
-   end
+        [cv.trainfolds,cv.testfolds] = cv.create_folds(Y);
+    elseif isempty(cv.trainfolds)
+        cv.trainfolds = cv.complement(Y,cv.testfolds);
+    else
+        cv.testfolds = cv.complement(Y,cv.trainfolds);
+    end
     
     nfolds    = length(cv.trainfolds);
     
@@ -118,44 +117,63 @@ if ischar(cfg.mva.method{1})
     stat.out                    = cell(nfolds, nout-2);
     
     
-    for f=1:nfolds % iterate over folds
-
-        if cv.verbose
-            fprintf('validating fold %d of %d\n',f,nfolds);
+    if isfield(cfg,'Gamma')
+        p = cfg.dim(1);
+        N = length(design);
+        ttrial = cfg.dim(2);
+        T = ttrial * ones(N,1);
+        datatmp = reshape(permute(reshape(dat,[p ttrial N]),[2 3 1]),[ttrial*N p]);
+        datatmp(any(isnan(datatmp),2),:) = [];
+        
+        design = reshape(repmat(design,[ttrial, 1]),[ttrial*N 1]);
+        
+        options.K = K;
+        options.parallel_trials = 1;
+        [tuda,Gamma] = tudatrain (datatmp,design',T,options);
+        
+        cfg.c.training = cv.trainfolds;
+        cfg.c.test = cv.testfolds;
+        R2 = tudacv_sa(datatmp,design,T,cfg,cfg.Gamma);
+        %something
+    else
+        
+        for f=1:nfolds % iterate over folds
+            
+            if cv.verbose
+                fprintf('validating fold %d of %d\n',f,nfolds);
+            end
+            
+            % construct X and Y for each fold
+            trainX = X(cv.trainfolds{f},:);
+            testX  = X(cv.testfolds{f},:);
+            trainY = Y(cv.trainfolds{f},:);
+            testY  = Y(cv.testfolds{f},:);
+            if isfield(cfg,'vocab')
+                cv.pos{f} = cfg.vocab(cv.testfolds{f});
+            end
+            
+            if ~isempty(cfg.max_smp)
+                [model,result,~]                      = mvafun(cfg,trainX,trainX,trainY);
+                cvtrain.model{f}.weights                    = model;
+                cvtrain.result{f}                           = result;
+                cvtrain.design{f}                           = trainY;
+            end
+            
+            [stat.model,stat.result{f},stat.out{f,1:end}]  = mvafun(cfg,trainX,testX,trainY);
+            cv.model{f}.weights                         = stat.model;
+            cv.result{f}                                = stat.result{f};
+            cv.design{f}                                = testY;
+            
+            clear varargout;
+            clear model;
+            clear result;
+            clear trainX;
+            clear testX;
+            clear trainY;
+            clear testY;
+            
         end
-        
-        % construct X and Y for each fold
-        trainX = X(cv.trainfolds{f},:);
-        testX  = X(cv.testfolds{f},:);
-        trainY = Y(cv.trainfolds{f},:);
-        testY  = Y(cv.testfolds{f},:);
-        if isfield(cfg,'vocab')
-          cv.pos{f} = cfg.vocab(cv.testfolds{f});
-        end
-        
-        if ~isempty(cfg.max_smp)
-            [model,result,~]                      = mvafun(cfg,trainX,trainX,trainY);  
-            cvtrain.model{f}.weights                    = model;
-            cvtrain.result{f}                           = result;
-            cvtrain.design{f}                           = trainY;
-        end
-        
-        [stat.model,stat.result{f},stat.out{f,1:end}]  = mvafun(cfg,trainX,testX,trainY);
-        cv.model{f}.weights                         = stat.model;
-        cv.result{f}                                = stat.result{f};
-        cv.design{f}                                = testY;
-        
-        
-        clear varargout;
-        clear model;
-        clear result;
-        clear trainX;
-        clear testX;
-        clear trainY;
-        clear testY;
- 
     end
-    
     % return unique model instead of cell array in case of one fold
     if length(cv.model)==1, cv.model = cv.model{1}; end
     
