@@ -122,15 +122,23 @@ if ischar(cfg.mva.method{1})
         
         design = reshape(repmat(design,[ttrial, 1]),[ttrial*N 1]);
         
-        options.K = K;
-        options.parallel_trials = 1;
-        [tuda,Gamma] = tudatrain (datatmp,design',T,options);
-        
         cfg.c.training = cv.trainfolds;
         cfg.c.test = cv.testfolds;
-        R2 = tudacv_sa(datatmp,design,T,cfg,cfg.Gamma);
-        %something
+        [model, result, designfold] = tudacv_sa(datatmp,design,T,cfg,cfg.Gamma);
+        
+        cv.model                    = model;
+        cv.result                   = result';
+        cv.design                   = designfold';
     else
+        
+        if strcmp(cfg.mva.method{1},'ridgeregression_sa')
+            %only scale, mean will be subtracted later on within mva script
+            sigma           = std(X,[],1);
+            sigma(sigma==0) = 1;
+            X               = bsxfun(@rdivide, X, sigma);
+            covar           = X*X';
+            cfg.sigma       = sigma;
+        end
         
         for f=1:nfolds % iterate over folds
             
@@ -143,8 +151,12 @@ if ischar(cfg.mva.method{1})
             testX  = X(cv.testfolds{f},:);
             trainY = Y(cv.trainfolds{f},:);
             testY  = Y(cv.testfolds{f},:);
+                        
             if isfield(cfg,'vocab')
                 cv.pos{f} = cfg.vocab(cv.testfolds{f});
+            end
+            if exist('covar','var')
+                cfg.datvar = covar(cv.trainfolds{f},cv.trainfolds{f});
             end
             
             if ~isempty(cfg.max_smp)
